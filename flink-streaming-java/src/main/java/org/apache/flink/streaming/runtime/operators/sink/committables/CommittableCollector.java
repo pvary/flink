@@ -238,10 +238,9 @@ public class CommittableCollector<CommT> {
                         summary.getCheckpointId().orElse(EOI),
                         key ->
                                 new CheckpointCommittableManagerImpl<>(
-                                        subtaskId,
                                         numberOfSubtasks,
-                                        summary.getCheckpointId().orElse(EOI),
-                                        metricGroup))
+                                        new CommittableContext(summary.getCheckpointId().orElse(EOI), subtaskId,
+                                                metricGroup)))
                 .upsertSummary(summary);
     }
 

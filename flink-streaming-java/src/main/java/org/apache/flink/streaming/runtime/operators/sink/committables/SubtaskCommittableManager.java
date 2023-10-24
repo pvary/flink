@@ -19,7 +19,6 @@
 package org.apache.flink.streaming.runtime.operators.sink.committables;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.metrics.groups.SinkCommitterMetricGroup;
 import org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage;
 
 import javax.annotation.Nullable;
@@ -42,25 +41,19 @@ import static org.apache.flink.util.Preconditions.checkState;
 class SubtaskCommittableManager<CommT> {
     private final Deque<CommitRequestImpl<CommT>> requests;
     private int numExpectedCommittables;
-    @Nullable private final Long checkpointId;
-    private final int subtaskId;
     private int numDrained;
     private int numFailed;
-    private SinkCommitterMetricGroup metricGroup;
+    private final CommittableContext context;
 
     SubtaskCommittableManager(
             int numExpectedCommittables,
-            int subtaskId,
-            @Nullable Long checkpointId,
-            SinkCommitterMetricGroup metricGroup) {
+            CommittableContext context) {
         this(
                 Collections.emptyList(),
                 numExpectedCommittables,
                 0,
                 0,
-                subtaskId,
-                checkpointId,
-                metricGroup);
+                context);
     }
 
     SubtaskCommittableManager(
@@ -68,16 +61,12 @@ class SubtaskCommittableManager<CommT> {
             int numExpectedCommittables,
             int numDrained,
             int numFailed,
-            int subtaskId,
-            @Nullable Long checkpointId,
-            SinkCommitterMetricGroup metricGroup) {
-        this.checkpointId = checkpointId;
-        this.subtaskId = subtaskId;
+            CommittableContext context) {
         this.numExpectedCommittables = numExpectedCommittables;
         this.requests = new ArrayDeque<>(checkNotNull(requests));
         this.numDrained = numDrained;
         this.numFailed = numFailed;
-        this.metricGroup = metricGroup;
+        this.context = context;
     }
 
     void add(CommittableWithLineage<CommT> committable) {
@@ -86,8 +75,8 @@ class SubtaskCommittableManager<CommT> {
 
     void add(CommT committable) {
         checkState(requests.size() < numExpectedCommittables, "Already received all committables.");
-        requests.add(new CommitRequestImpl<>(committable, metricGroup));
-        metricGroup.getNumCommittablesTotalCounter().inc();
+        requests.add(new CommitRequestImpl<>(committable, context));
+        context.getMetricGroup().getNumCommittablesTotalCounter().inc();
     }
 
     /**
@@ -161,7 +150,7 @@ class SubtaskCommittableManager<CommT> {
             } else {
                 committed.add(
                         new CommittableWithLineage<>(
-                                request.getCommittable(), checkpointId, subtaskId));
+                                request.getCommittable(), context.getCheckpointId(), context.getSubtaskId()));
             }
             iterator.remove();
         }
@@ -175,13 +164,13 @@ class SubtaskCommittableManager<CommT> {
     }
 
     int getSubtaskId() {
-        return subtaskId;
+        return context.getSubtaskId();
     }
 
     @VisibleForTesting
     @Nullable
     Long getCheckpointId() {
-        return checkpointId;
+        return context.getCheckpointId();
     }
 
     Deque<CommitRequestImpl<CommT>> getRequests() {
@@ -203,8 +192,6 @@ class SubtaskCommittableManager<CommT> {
                 numExpectedCommittables,
                 numDrained,
                 numFailed,
-                subtaskId,
-                checkpointId,
-                metricGroup);
+                context);
     }
 }

@@ -196,9 +196,9 @@ abstract class CommitterOperatorTestBase {
                 .hasOverallCommittables(2)
                 .hasPendingCommittables(0);
         SinkV2Assertions.assertThat(toCommittableWithLinage(output.get(1)))
-                .isEqualTo(copyCommittableWithDifferentOrigin(first, 0));
+                .isEqualTo(copyCommittableWithDifferentOriginAndCheckpoint(first, 0, Long.MAX_VALUE));
         SinkV2Assertions.assertThat(toCommittableWithLinage(output.get(2)))
-                .isEqualTo(copyCommittableWithDifferentOrigin(second, 0));
+                .isEqualTo(copyCommittableWithDifferentOriginAndCheckpoint(second, 0, Long.MAX_VALUE));
         testHarness.close();
     }
 
@@ -329,11 +329,16 @@ abstract class CommitterOperatorTestBase {
 
     CommittableWithLineage<?> copyCommittableWithDifferentOrigin(
             CommittableWithLineage<?> committable, int subtaskId) {
+        return copyCommittableWithDifferentOriginAndCheckpoint(committable, subtaskId, committable.getCheckpointId().isPresent()
+                ? committable.getCheckpointId().getAsLong()
+                : null);
+    }
+
+    CommittableWithLineage<?> copyCommittableWithDifferentOriginAndCheckpoint(
+            CommittableWithLineage<?> committable, int subtaskId, Long checkpoint) {
         return new CommittableWithLineage<>(
                 committable.getCommittable(),
-                committable.getCheckpointId().isPresent()
-                        ? committable.getCheckpointId().getAsLong()
-                        : null,
+                checkpoint,
                 subtaskId);
     }
 

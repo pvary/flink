@@ -43,7 +43,7 @@ class CheckpointCommittableManagerImplTest {
     @Test
     void testAddSummary() {
         final CheckpointCommittableManagerImpl<Integer> checkpointCommittables =
-                new CheckpointCommittableManagerImpl<>(2, 1, 1L, METRIC_GROUP);
+                new CheckpointCommittableManagerImpl<>(1, new CommittableContext(1L, 2, METRIC_GROUP));
         assertThat(checkpointCommittables.getSubtaskCommittableManagers()).isEmpty();
 
         final CommittableSummary<Integer> first = new CommittableSummary<>(1, 1, 1L, 1, 0, 0);
@@ -67,7 +67,7 @@ class CheckpointCommittableManagerImplTest {
     @Test
     void testCommit() throws IOException, InterruptedException {
         final CheckpointCommittableManagerImpl<Integer> checkpointCommittables =
-                new CheckpointCommittableManagerImpl<>(1, 1, 1L, METRIC_GROUP);
+                new CheckpointCommittableManagerImpl<>(1, new CommittableContext(1L, 1, METRIC_GROUP));
         checkpointCommittables.upsertSummary(new CommittableSummary<>(1, 1, 1L, 1, 0, 0));
         checkpointCommittables.upsertSummary(new CommittableSummary<>(2, 1, 1L, 2, 0, 0));
         checkpointCommittables.addCommittable(new CommittableWithLineage<>(3, 1L, 1));
@@ -91,7 +91,7 @@ class CheckpointCommittableManagerImplTest {
     @Test
     void testUpdateCommittableSummary() {
         final CheckpointCommittableManagerImpl<Integer> checkpointCommittables =
-                new CheckpointCommittableManagerImpl<>(1, 1, 1L, METRIC_GROUP);
+                new CheckpointCommittableManagerImpl<>(1, new CommittableContext(1L, 1, METRIC_GROUP));
         checkpointCommittables.upsertSummary(new CommittableSummary<>(1, 1, 1L, 1, 0, 0));
         assertThatThrownBy(
                         () ->
@@ -109,7 +109,7 @@ class CheckpointCommittableManagerImplTest {
 
         final CheckpointCommittableManagerImpl<Integer> original =
                 new CheckpointCommittableManagerImpl<>(
-                        subtaskId, numberOfSubtasks, checkpointId, METRIC_GROUP);
+                         numberOfSubtasks, new CommittableContext(checkpointId, subtaskId, METRIC_GROUP));
         original.upsertSummary(
                 new CommittableSummary<>(subtaskId, numberOfSubtasks, checkpointId, 1, 0, 0));
 

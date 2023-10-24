@@ -102,7 +102,7 @@ public final class CommittableCollectorSerializer<CommT>
             throws IOException {
 
         SimpleVersionedSerialization.writeVersionAndSerializeList(
-                new CheckpointSimpleVersionedSerializer(metricGroup),
+                new CheckpointSimpleVersionedSerializer(),
                 new ArrayList<>(committableCollector.getCheckpointCommittables()),
                 dataOutputView);
     }
@@ -110,7 +110,7 @@ public final class CommittableCollectorSerializer<CommT>
     private CommittableCollector<CommT> deserializeV2(DataInputDeserializer in) throws IOException {
         List<CheckpointCommittableManagerImpl<CommT>> checkpoints =
                 SimpleVersionedSerialization.readVersionAndDeserializeList(
-                        new CheckpointSimpleVersionedSerializer(metricGroup), in);
+                        new CheckpointSimpleVersionedSerializer(), in);
         return new CommittableCollector<>(
                 checkpoints.stream()
                         .collect(
@@ -131,12 +131,6 @@ public final class CommittableCollectorSerializer<CommT>
 
     private class CheckpointSimpleVersionedSerializer
             implements SimpleVersionedSerializer<CheckpointCommittableManagerImpl<CommT>> {
-        private final SinkCommitterMetricGroup metricGroup;
-
-        public CheckpointSimpleVersionedSerializer(SinkCommitterMetricGroup metricGroup) {
-            this.metricGroup = metricGroup;
-        }
-
         @Override
         public int getVersion() {
             return 0;
@@ -148,7 +142,7 @@ public final class CommittableCollectorSerializer<CommT>
             DataOutputSerializer out = new DataOutputSerializer(256);
             out.writeLong(checkpoint.getCheckpointId());
             SimpleVersionedSerialization.writeVersionAndSerializeList(
-                    new SubtaskSimpleVersionedSerializer(metricGroup),
+                    new SubtaskSimpleVersionedSerializer(),
                     new ArrayList<>(checkpoint.getSubtaskCommittableManagers()),
                     out);
             return out.getCopyOfBuffer();
@@ -163,7 +157,7 @@ public final class CommittableCollectorSerializer<CommT>
 
             List<SubtaskCommittableManager<CommT>> subtaskCommittableManagers =
                     SimpleVersionedSerialization.readVersionAndDeserializeList(
-                            new SubtaskSimpleVersionedSerializer(checkpointId, metricGroup), in);
+                            new SubtaskSimpleVersionedSerializer(checkpointId), in);
 
             Map<Integer, SubtaskCommittableManager<CommT>> subtasksCommittableManagers =
                     CollectionUtil.newHashMapWithExpectedSize(subtaskCommittableManagers.size());
@@ -188,10 +182,8 @@ public final class CommittableCollectorSerializer<CommT>
 
             return new CheckpointCommittableManagerImpl<>(
                     subtasksCommittableManagers,
-                    subtaskId,
                     numberOfSubtasks,
-                    checkpointId,
-                    metricGroup);
+                    new CommittableContext(checkpointId, subtaskId, metricGroup));
         }
     }
 
@@ -199,31 +191,25 @@ public final class CommittableCollectorSerializer<CommT>
             implements SimpleVersionedSerializer<SubtaskCommittableManager<CommT>> {
 
         @Nullable private final Long checkpointId;
-        private final SinkCommitterMetricGroup metricGroup;
 
         /**
          * This ctor must be used to create a deserializer where the checkpointId is used to set the
          * checkpointId of the deserialized SubtaskCommittableManager.
          *
          * @param checkpointId used to recover the SubtaskCommittableManager
-         * @param metricGroup metric group used to collect the committer metrics
          */
         public SubtaskSimpleVersionedSerializer(
-                long checkpointId, SinkCommitterMetricGroup metricGroup) {
+                long checkpointId) {
             this.checkpointId = checkpointId;
-            this.metricGroup = metricGroup;
         }
 
         /**
          * When using this ctor, you cannot use the serializer for deserialization because it misses
          * the checkpointId. For deserialization please use {@link
-         * #SubtaskSimpleVersionedSerializer(long, SinkCommitterMetricGroup)}.
-         *
-         * @param metricGroup metric group used to collect the committer metrics
+         * #SubtaskSimpleVersionedSerializer(long)}.
          */
-        public SubtaskSimpleVersionedSerializer(SinkCommitterMetricGroup metricGroup) {
+        public SubtaskSimpleVersionedSerializer() {
             this.checkpointId = null;
-            this.metricGroup = metricGroup;
         }
 
         @Override
@@ -256,11 +242,12 @@ public final class CommittableCollectorSerializer<CommT>
                     in.readInt(),
                     in.readInt(),
                     in.readInt(),
+                    new CommittableContext(
+                            checkNotNull(
+                                    checkpointId,
+                                    "CheckpointId must be set to align the SubtaskCommittableManager with holding CheckpointCommittableManager."),
                     subtaskId,
-                    checkNotNull(
-                            checkpointId,
-                            "CheckpointId must be set to align the SubtaskCommittableManager with holding CheckpointCommittableManager."),
-                    metricGroup);
+                    metricGroup));
         }
 
         private class RequestSimpleVersionedSerializer
@@ -291,7 +278,12 @@ public final class CommittableCollectorSerializer<CommT>
                         committable,
                         in.readInt(),
                         CommitRequestState.values()[in.readInt()],
-                        metricGroup);
+                        new CommittableContext(
+                                checkNotNull(
+                                        checkpointId,
+                                        "CheckpointId must be set to align the SubtaskCommittableManager with holding CheckpointCommittableManager."),
+                                                    subtaskId,
+                                metricGroup));
             }
         }
     }

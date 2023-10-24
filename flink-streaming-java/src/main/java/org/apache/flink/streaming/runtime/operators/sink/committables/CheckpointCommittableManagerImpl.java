@@ -40,36 +40,27 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
     /** Mapping of subtask id to {@link SubtaskCommittableManager}. */
     private final Map<Integer, SubtaskCommittableManager<CommT>> subtasksCommittableManagers;
 
-    @Nullable private final Long checkpointId;
-    private final int subtaskId;
     private final int numberOfSubtasks;
-    private final SinkCommitterMetricGroup metricGroup;
+    private final CommittableContext context;
 
     CheckpointCommittableManagerImpl(
-            int subtaskId,
             int numberOfSubtasks,
-            @Nullable Long checkpointId,
-            SinkCommitterMetricGroup metricGroup) {
-        this(new HashMap<>(), subtaskId, numberOfSubtasks, checkpointId, metricGroup);
+            CommittableContext context) {
+        this(new HashMap<>(), numberOfSubtasks, context);
     }
 
     CheckpointCommittableManagerImpl(
             Map<Integer, SubtaskCommittableManager<CommT>> subtasksCommittableManagers,
-            int subtaskId,
             int numberOfSubtasks,
-            @Nullable Long checkpointId,
-            SinkCommitterMetricGroup metricGroup) {
+            CommittableContext context) {
         this.subtasksCommittableManagers = checkNotNull(subtasksCommittableManagers);
-        this.subtaskId = subtaskId;
         this.numberOfSubtasks = numberOfSubtasks;
-        this.checkpointId = checkpointId;
-        this.metricGroup = metricGroup;
+        this.context = context;
     }
 
     @Override
     public long getCheckpointId() {
-        checkNotNull(checkpointId);
-        return checkpointId;
+        return checkNotNull(context.getCheckpointId());
     }
 
     Collection<SubtaskCommittableManager<CommT>> getSubtaskCommittableManagers() {
@@ -82,11 +73,7 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
                         summary.getSubtaskId(),
                         new SubtaskCommittableManager<>(
                                 summary.getNumberOfCommittables(),
-                                subtaskId,
-                                summary.getCheckpointId().isPresent()
-                                        ? summary.getCheckpointId().getAsLong()
-                                        : null,
-                                metricGroup));
+                                context));
         if (existing != null) {
             throw new UnsupportedOperationException(
                     "Currently it is not supported to update the CommittableSummary for a checkpoint coming from the same subtask. Please check the status of FLINK-25920");
@@ -106,9 +93,9 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
     @Override
     public CommittableSummary<CommT> getSummary() {
         return new CommittableSummary<>(
-                subtaskId,
+                context.getSubtaskId(),
                 numberOfSubtasks,
-                checkpointId,
+                context.getCheckpointId(),
                 subtasksCommittableManagers.values().stream()
                         .mapToInt(SubtaskCommittableManager::getNumCommittables)
                         .sum(),
@@ -134,7 +121,7 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
         committer.commit(new ArrayList<>(requests));
         requests.forEach(CommitRequestImpl::setCommittedIfNoError);
         Collection<CommittableWithLineage<CommT>> committed = drainFinished();
-        metricGroup.setCurrentPendingCommittablesGauge(() -> getPendingRequests(false).size());
+        context.getMetricGroup().setCurrentPendingCommittablesGauge(() -> getPendingRequests(false).size());
         return committed;
     }
 
@@ -152,7 +139,7 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
     }
 
     CheckpointCommittableManagerImpl<CommT> merge(CheckpointCommittableManagerImpl<CommT> other) {
-        checkArgument(Objects.equals(other.checkpointId, checkpointId));
+        checkArgument(Objects.equals(other.getCheckpointId(), getCheckpointId()));
         for (Map.Entry<Integer, SubtaskCommittableManager<CommT>> subtaskEntry :
                 other.subtasksCommittableManagers.entrySet()) {
             subtasksCommittableManagers.merge(
@@ -167,9 +154,7 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
         return new CheckpointCommittableManagerImpl<>(
                 subtasksCommittableManagers.entrySet().stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, (e) -> e.getValue().copy())),
-                subtaskId,
                 numberOfSubtasks,
-                checkpointId,
-                metricGroup);
+                context);
     }
 }

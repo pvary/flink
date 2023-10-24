@@ -33,13 +33,13 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SubtaskCommittableManagerTest {
-    private static final SinkCommitterMetricGroup METRIC_GROUP =
-            MetricsGroupTestUtils.mockCommitterMetricGroup();
+    private static final CommittableContext COMMITTABLE_CONTEXT =
+            new CommittableContext(1L, 1, MetricsGroupTestUtils.mockCommitterMetricGroup());
 
     @Test
     void testDrainCommittables() {
         final SubtaskCommittableManager<Integer> subtaskCommittableManager =
-                new SubtaskCommittableManager<>(3, 1, 1L, METRIC_GROUP);
+                new SubtaskCommittableManager<>(3, COMMITTABLE_CONTEXT);
         final CommittableWithLineage<Integer> first = new CommittableWithLineage<Integer>(1, 1L, 1);
         final CommittableWithLineage<Integer> second =
                 new CommittableWithLineage<Integer>(2, 1L, 1);
@@ -104,24 +104,20 @@ class SubtaskCommittableManagerTest {
     void testMerge() {
         final SubtaskCommittableManager<Integer> subtaskCommittableManager =
                 new SubtaskCommittableManager<>(
-                        Collections.singletonList(new CommitRequestImpl<>(1, METRIC_GROUP)),
+                        Collections.singletonList(new CommitRequestImpl<>(1, COMMITTABLE_CONTEXT)),
                         5,
                         1,
                         2,
-                        1,
-                        2L,
-                        METRIC_GROUP);
+                        COMMITTABLE_CONTEXT);
         subtaskCommittableManager.merge(
                 new SubtaskCommittableManager<>(
                         Arrays.asList(
-                                new CommitRequestImpl<>(2, METRIC_GROUP),
-                                new CommitRequestImpl<>(3, METRIC_GROUP)),
+                                new CommitRequestImpl<>(2, COMMITTABLE_CONTEXT),
+                                new CommitRequestImpl<>(3, COMMITTABLE_CONTEXT)),
                         10,
                         2,
                         3,
-                        1,
-                        2L,
-                        METRIC_GROUP));
+                        COMMITTABLE_CONTEXT));
         assertThat(subtaskCommittableManager.getNumCommittables()).isEqualTo(11);
         assertThat(subtaskCommittableManager.getNumDrained()).isEqualTo(3);
         assertThat(subtaskCommittableManager.isFinished()).isFalse();
